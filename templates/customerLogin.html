@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Login</title>
+</head>
+<body>
+    <h1>Customer Login</h1>
+    <form action="/customerlogin" method="POST">
+        <label for="customername">Customer Name:</label>
+        <input type="text" id="customername" name="customername" required><br>
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required><br>
+        <button type="submit">Login</button>
+    </form>
+    <!-- Admin Login Button -->
+    <form action="adminlogin" method="GET">
+        <button type="submit">Admin Login</button>
+    </form>
+</body>
+</html>

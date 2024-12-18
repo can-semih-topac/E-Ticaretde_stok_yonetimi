@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ürün Listesi ve Sipariş</title>
+    <script>
+        function enableQuantityInput(radioButton) {
+            document.querySelectorAll('input[type="number"]').forEach(input => {
+                input.disabled = true;
+                input.value = '';
+            });
+            const quantityInput = document.getElementById('quantity-' + radioButton.value);
+            if (quantityInput) {
+                quantityInput.disabled = false;
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- Kullanıcı Bilgileri -->
+    <div>
+        <h1>Hoşgeldin {{ customer.CustomerName }}</h1>
+        <p>Bütçeniz: {{ customer.Budget }} TL</p>
+    </div>
+
+    <!-- Ürün Listesi ve Sipariş -->
+    <h2>Ürün Listesi ve Sipariş Oluşturma</h2>
+    <form action="/order" method="POST">
+        <table border="1">
+            <thead>
+                <tr>
+                    <th>Ürün ID</th>
+                    <th>Ürün Adı</th>
+                    <th>Stok</th>
+                    <th>Fiyat (TL)</th>
+                    <th>Seçim</th>
+                    <th>Adet</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td>{{ product.ProductID }}</td>
+                    <td>{{ product.ProductName }}</td>
+                    <td>{{ product.Stock }}</td>
+                    <td>{{ product.Price }}</td>
+                    <td>
+                        <input type="radio" name="product_id" value="{{ product.ProductID }}" onclick="enableQuantityInput(this)" required>
+                    </td>
+                    <td>
+                        <input type="number" id="quantity-{{ product.ProductID }}" name="quantity" min="1" max="{{ product.Stock }}" disabled required>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <br>
+        <button type="submit">Sipariş Ver</button>
+    </form>
+
+    <!-- Çıkış Yap Butonu -->
+    <div style="margin-top: 20px; text-align: center;">
+        <a href="/logout" style="color: white; background-color: red; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Çıkış Yap</a>
+    </div>
+</body>
+</html>
