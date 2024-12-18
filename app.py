@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from config import DB_CONFIG  # Veritabanı bilgilerini config dosyasından alıyoruz.
-from models import db, Customer, Admin, Product  # Modelleri ve db'yi içe aktar
+from models import db, Customer, Admin, Product, Order  # Modelleri ve db'yi içe aktar
 
 # Flask ve SQLAlchemy ayarları
 app = Flask(__name__)
@@ -69,17 +69,52 @@ def admin_panel():
 
 @app.route('/order', methods=['POST'])
 def place_order():
+    # Oturumdan müşteri ID'sini al
+    customer_id = session.get('customer_id')
+    if not customer_id:
+        return redirect(url_for('login_page'))  # Eğer giriş yapılmadıysa login sayfasına yönlendir
+
+    # Formdan ürün ID'si ve miktar bilgilerini al
     product_id = int(request.form['product_id'])
     quantity = int(request.form['quantity'])
 
-    # Ürün kontrolü
+    # Veritabanından müşteri ve ürün bilgilerini al
+    customer = Customer.query.get(customer_id)
     product = Product.query.get(product_id)
-    if product and product.Stock >= quantity:
+
+    if not product:
+        return "Ürün bulunamadı."
+
+    # Sipariş tutarını hesapla
+    total_price = product.Price * quantity
+
+    # Bütçe kontrolü
+    if customer.Budget < total_price:
+        return "Yetersiz Bütçe! Lütfen daha düşük bir miktar girin."
+
+    # Bütçe yeterli, siparişi tamamla
+    if product.Stock >= quantity:
+        # Ürünün stok miktarını güncelle
         product.Stock -= quantity
+
+        # Müşterinin bütçesini güncelle
+        customer.Budget -= total_price
+
+        # Siparişi Orders tablosuna kaydet
+        new_order = Order(
+            CustomerID=customer.CustomerID,
+            ProductID=product.ProductID,
+            Quantity=quantity,
+            TotalPrice=total_price
+        )
+        db.session.add(new_order)
+
+        # Veritabanını güncelle
         db.session.commit()
-        return f"Sipariş başarılı! {quantity} adet {product.ProductName} satın aldınız."
+
+        return f"Sipariş başarıyla verildi! {quantity} adet {product.ProductName} satın aldınız."
     else:
-        return "Stok yetersiz!"
+        return "Stok yetersiz! Lütfen tekrar deneyin."
 
 # Flask uygulamasını çalıştır
 if __name__ == '__main__':
