@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime  # datetime modülünü içe aktarın
+
 db = SQLAlchemy()
 
 class Customer(db.Model):
@@ -8,6 +9,8 @@ class Customer(db.Model):
     CustomerName = db.Column(db.String(50), nullable=False)
     Password = db.Column(db.String(256), nullable=False)  # Şifre güvenliği için hash kullanın
     Budget = db.Column(db.Float, nullable=False, default=0.0)  # Bütçe alanı
+    CustomerType = db.Column(db.String(10), nullable=False, default="Standard")  # Premium veya Standard
+    TotalSpent = db.Column(db.Float, nullable=False, default=0.0)  # Harcanan toplam tutar
 
 class Admin(db.Model):
     __tablename__ = 'Admins'
@@ -45,3 +48,13 @@ class ConfirmedOrder(db.Model):
 
     customer = db.relationship('Customer', backref='confirmed_orders', lazy=True)
     product = db.relationship('Product', backref='confirmed_orders', lazy=True)
+
+class Log(db.Model):
+    __tablename__ = 'logs'
+
+    LogID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    CustomerID = db.Column(db.Integer, nullable=True)  # Admin işlemleri için null olabilir
+    OrderID = db.Column(db.Integer, nullable=True)  # Bağlantılı sipariş ID'si
+    LogType = db.Column(db.String(50), nullable=False)  # Hata, Uyarı, Bilgilendirme
+    LogDetails = db.Column(db.Text, nullable=False)
+    LogDate = db.Column(db.DateTime, default=datetime.utcnow)

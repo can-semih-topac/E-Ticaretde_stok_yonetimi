@@ -2,7 +2,80 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ürün Listesi ve Sipariş</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #f3e5ab, #f5b7b1);
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        h1, h2 {
+            text-align: center;
+            color: #444;
+        }
+        p {
+            text-align: center;
+            font-size: 18px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        table th, table td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        table th {
+            background: #f8c471;
+            color: white;
+        }
+        table tbody tr:nth-child(even) {
+            background: #f2f2f2;
+        }
+        button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            background-color: #f5b041;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #d68910;
+        }
+        a {
+            display: inline-block;
+            color: white;
+            background-color: red;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        a:hover {
+            background-color: darkred;
+        }
+        .center {
+            text-align: center;
+        }
+    </style>
     <script>
         function enableQuantityInput(checkbox) {
             const quantityInput = document.getElementById('quantity-' + checkbox.value);
@@ -16,52 +89,81 @@
     </script>
 </head>
 <body>
-    <!-- Kullanıcı Bilgileri -->
-    <div>
-        <h1>Hoşgeldin {{ customer.CustomerName }}</h1>
-        <p>Bütçeniz: {{ customer.Budget }} TL</p>
-    </div>
+    <div class="container">
+        <!-- Kullanıcı Bilgileri -->
+        <h1>Hoşgeldin {{ customer.CustomerName }} ({{ customer.CustomerType }})</h1>
+        <p>Bütçeniz: <strong>{{ customer.Budget }} TL</strong></p>
 
-    <!-- Ürün Listesi ve Sipariş -->
-    <h2>Ürün Listesi ve Sipariş Oluşturma</h2>
-    <form action="/order" method="POST">
-        <table border="1">
+        <!-- Ürün Listesi ve Sipariş -->
+        <h2>Ürün Listesi ve Sipariş Oluşturma</h2>
+        <form action="/order" method="POST">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Ürün ID</th>
+                        <th>Ürün Adı</th>
+                        <th>Stok</th>
+                        <th>Fiyat (TL)</th>
+                        <th>Seçim</th>
+                        <th>Adet</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in products %}
+                    <tr>
+                        <td>{{ product.ProductID }}</td>
+                        <td>{{ product.ProductName }}</td>
+                        <td>{{ product.Stock }}</td>
+                        <td>{{ product.Price }}</td>
+                        <td>
+                            <input type="checkbox" name="product_ids" value="{{ product.ProductID }}" onclick="enableQuantityInput(this)">
+                        </td>
+                        <td>
+                            <input type="number" id="quantity-{{ product.ProductID }}" name="quantities" min="1" max="{{ product.Stock }}" disabled>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="submit">Sipariş Ver</button>
+        </form>
+
+        <!-- Kullanıcı Siparişleri -->
+        <h2>Verilen Siparişler</h2>
+        <table>
             <thead>
                 <tr>
-                    <th>Ürün ID</th>
-                    <th>Ürün Adı</th>
-                    <th>Stok</th>
-                    <th>Fiyat (TL)</th>
-                    <th>Seçim</th>
-                    <th>Adet</th>
+                    <th>Sipariş Tarihi</th>
+                    <th>Ürün</th>
+                    <th>Toplam Tutar</th>
+                    <th>Sipariş Durumu</th>
                 </tr>
             </thead>
             <tbody>
-                {% for product in products %}
+                {% for order in orders %}
                 <tr>
-                    <td>{{ product.ProductID }}</td>
-                    <td>{{ product.ProductName }}</td>
-                    <td>{{ product.Stock }}</td>
-                    <td>{{ product.Price }}</td>
-                    <td>
-                        <!-- Checkbox ile ürün seçimi -->
-                        <input type="checkbox" name="product_ids" value="{{ product.ProductID }}" onclick="enableQuantityInput(this)">
-                    </td>
-                    <td>
-                        <!-- Miktar girişi; varsayılan olarak devre dışı -->
-                        <input type="number" id="quantity-{{ product.ProductID }}" name="quantities" min="1" max="{{ product.Stock }}" disabled>
-                    </td>
+                    <td>{{ order.OrderDate }}</td>
+                    <td>{{ order.ProductName }}</td>
+                    <td>{{ order.TotalPrice }} TL</td>
+                    <td>Onaylama Bekliyor</td>
+                </tr>
+                {% endfor %}
+
+                {% for confirmed_order in confirmed_orders %}
+                <tr>
+                    <td>{{ confirmed_order.OrderDate }}</td>
+                    <td>{{ confirmed_order.ProductName }}</td>
+                    <td>{{ confirmed_order.TotalPrice }} TL</td>
+                    <td>Onaylanmış</td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
-        <br>
-        <button type="submit">Sipariş Ver</button>
-    </form>
 
-    <!-- Çıkış Yap Butonu -->
-    <div style="margin-top: 20px; text-align: center;">
-        <a href="/logout" style="color: white; background-color: red; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Çıkış Yap</a>
+        <!-- Çıkış Yap Butonu -->
+        <div class="center" style="margin-top: 20px;">
+            <a href="/logout">Çıkış Yap</a>
+        </div>
     </div>
 </body>
 </html>

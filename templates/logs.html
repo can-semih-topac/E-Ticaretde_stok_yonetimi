@@ -1,0 +1,24 @@
+<table>
+    <thead>
+        <tr>
+            <th>Log ID</th>
+            <th>Müşteri ID</th>
+            <th>Order ID</th>
+            <th>Log Türü</th>
+            <th>Detaylar</th>
+            <th>Tarih</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for log in logs %}
+        <tr>
+            <td>{{ log.LogID }}</td>
+            <td>{{ log.CustomerID or "N/A" }}</td>
+            <td>{{ log.OrderID or "N/A" }}</td>
+            <td>{{ log.LogType }}</td>
+            <td>{{ log.LogDetails }}</td>
+            <td>{{ log.LogDate }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
