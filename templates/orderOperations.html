@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sipariş İşlemleri</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        table {
+            margin: 20px auto;
+            border-collapse: collapse;
+            width: 80%;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: center;
+        }
+        .action-button button {
+            margin: 5px;
+            padding: 10px 15px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .approve-button {
+            background-color: green;
+            color: white;
+        }
+        .approve-button:hover {
+            background-color: darkgreen;
+        }
+    </style>
+</head>
+<body>
+    <h1>Sipariş İşlemleri</h1>
+
+    <!-- Orders Tablosu -->
+    <h2>Bekleyen Siparişler</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Sipariş ID</th>
+                <th>Müşteri ID</th>
+                <th>Ürün ID</th>
+                <th>Miktar</th>
+                <th>Toplam Fiyat</th>
+                <th>Sipariş Tarihi</th>
+                <th>Öncelik</th>
+                <th>İşlemler</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for order in orders %}
+            <tr>
+                <td>{{ order.OrderID }}</td>
+                <td>{{ order.CustomerID }}</td>
+                <td>{{ order.ProductID }}</td>
+                <td>{{ order.Quantity }}</td>
+                <td>{{ order.TotalPrice }}</td>
+                <td>{{ order.OrderDate }}</td>
+                <td>1</td> <!-- Öncelik Sütunu (Sabit Değer) -->
+                <td class="action-button">
+                    <form action="/approveOrder" method="POST" style="display: inline;">
+                        <input type="hidden" name="order_id" value="{{ order.OrderID }}">
+                        <button type="submit" class="approve-button">Onayla</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- ConfirmedOrders Tablosu -->
+    <h2>Onaylanmış Siparişler</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Sipariş ID</th>
+                <th>Müşteri ID</th>
+                <th>Ürün ID</th>
+                <th>Miktar</th>
+                <th>Toplam Fiyat</th>
+                <th>Sipariş Tarihi</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for confirmed_order in confirmed_orders %}
+            <tr>
+                <td>{{ confirmed_order.OrderID }}</td>
+                <td>{{ confirmed_order.CustomerID }}</td>
+                <td>{{ confirmed_order.ProductID }}</td>
+                <td>{{ confirmed_order.Quantity }}</td>
+                <td>{{ confirmed_order.TotalPrice }}</td>
+                <td>{{ confirmed_order.OrderDate }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

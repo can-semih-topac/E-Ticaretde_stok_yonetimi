@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-
+from datetime import datetime  # datetime modülünü içe aktarın
 db = SQLAlchemy()
 
 class Customer(db.Model):
@@ -29,5 +29,19 @@ class Order(db.Model):
     ProductID = db.Column(db.Integer, db.ForeignKey('Products.ProductID'), nullable=False)
     Quantity = db.Column(db.Integer, nullable=False)
     TotalPrice = db.Column(db.Float, nullable=False)
+    OrderDate = db.Column(db.DateTime, default=datetime.utcnow)  # OrderDate alanı eklendi
+
     Customer = db.relationship('Customer', backref=db.backref('orders', lazy=True))
     Product = db.relationship('Product', backref=db.backref('orders', lazy=True))
+
+class ConfirmedOrder(db.Model):
+    __tablename__ = 'ConfirmedOrders'
+    OrderID = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    CustomerID = db.Column(db.Integer, db.ForeignKey('Customers.CustomerID'), nullable=False)
+    ProductID = db.Column(db.Integer, db.ForeignKey('Products.ProductID'), nullable=False)
+    Quantity = db.Column(db.Integer, nullable=False)
+    TotalPrice = db.Column(db.Float, nullable=False)
+    OrderDate = db.Column(db.DateTime, default=datetime.utcnow)
+
+    customer = db.relationship('Customer', backref='confirmed_orders', lazy=True)
+    product = db.relationship('Product', backref='confirmed_orders', lazy=True)

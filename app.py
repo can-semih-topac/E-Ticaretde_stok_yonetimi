@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 from config import DB_CONFIG  # Veritabanı bilgilerini config dosyasından alıyoruz.
-from models import db, Customer, Admin, Product, Order  # Modelleri ve db'yi içe aktar
+from models import db, Customer, Admin, Product, Order, ConfirmedOrder  # Modelleri ve db'yi içe aktar
 
 # Flask ve SQLAlchemy ayarları
 app = Flask(__name__)
@@ -74,31 +74,43 @@ def place_order():
     if not customer_id:
         return redirect(url_for('login_page'))  # Eğer giriş yapılmadıysa login sayfasına yönlendir
 
-    # Formdan ürün ID'si ve miktar bilgilerini al
-    product_id = int(request.form['product_id'])
-    quantity = int(request.form['quantity'])
+    # Formdan seçilen ürün ID'leri ve miktarlarını al
+    product_ids = request.form.getlist('product_ids')
+    quantities = request.form.getlist('quantities')
 
-    # Veritabanından müşteri ve ürün bilgilerini al
+    # Veritabanından müşteri bilgilerini al
     customer = Customer.query.get(customer_id)
-    product = Product.query.get(product_id)
 
-    if not product:
-        return "Ürün bulunamadı."
+    # Sipariş toplam fiyatını hesapla
+    total_order_price = 0
+    orders_to_add = []
 
-    # Sipariş tutarını hesapla
-    total_price = product.Price * quantity
+    for product_id, quantity in zip(product_ids, quantities):
+        product = Product.query.get(int(product_id))
+        quantity = int(quantity)
+
+        if not product:
+            return f"Ürün ID {product_id} bulunamadı."
+
+        total_price = product.Price * quantity
+        total_order_price += total_price
+
+        # Sipariş detayını kaydetmek için listeye ekle
+        orders_to_add.append({
+            "product": product,
+            "quantity": quantity,
+            "total_price": total_price
+        })
 
     # Bütçe kontrolü
-    if customer.Budget < total_price:
-        return "Yetersiz Bütçe! Lütfen daha düşük bir miktar girin."
+    if customer.Budget < total_order_price:
+        return "Yetersiz Bütçe! Lütfen daha düşük bir sipariş girin."
 
-    # Bütçe yeterli, siparişi tamamla
-    if product.Stock >= quantity:
-        # Ürünün stok miktarını güncelle
-        product.Stock -= quantity
-
-        # Müşterinin bütçesini güncelle
-        customer.Budget -= total_price
+    # Siparişi tamamla
+    for order in orders_to_add:
+        product = order["product"]
+        quantity = order["quantity"]
+        total_price = order["total_price"]
 
         # Siparişi Orders tablosuna kaydet
         new_order = Order(
@@ -109,12 +121,112 @@ def place_order():
         )
         db.session.add(new_order)
 
-        # Veritabanını güncelle
-        db.session.commit()
+    # Veritabanını güncelle
+    db.session.commit()
 
-        return f"Sipariş başarıyla verildi! {quantity} adet {product.ProductName} satın aldınız."
+    return f"Sipariş başarıyla verildi! Toplam: {total_order_price:.2f} TL"
+
+
+@app.route('/orderOperations', methods=['GET'])
+def order_operations():
+    orders = Order.query.all()  # Orders tablosundaki tüm siparişleri al
+    confirmed_orders = ConfirmedOrder.query.all()  # ConfirmedOrders tablosundaki tüm siparişleri al
+    return render_template('orderOperations.html', orders=orders, confirmed_orders=confirmed_orders)
+
+@app.route('/approveOrder', methods=['POST'])
+def approve_order():
+    order_id = request.form['order_id']  # Formdan gelen sipariş ID'sini al
+    order = Order.query.get(order_id)  # Orders tablosundan siparişi al
+
+    if not order:
+        return "Sipariş bulunamadı!"
+
+    # Veritabanından ürün bilgilerini al
+    product = Product.query.get(order.ProductID)
+    if not product:
+        return "Ürün bulunamadı!"
+
+    # Stok kontrolü
+    if order.Quantity > product.Stock:
+        return f"Yetersiz stok! {product.ProductName} için maksimum {product.Stock} adet onaylanabilir."
+
+    # Ürünün stok miktarını güncelle
+    product.Stock -= order.Quantity
+
+    # Siparişi ConfirmedOrders tablosuna ekle
+    confirmed_order = ConfirmedOrder(
+        CustomerID=order.CustomerID,
+        ProductID=order.ProductID,
+        Quantity=order.Quantity,
+        TotalPrice=order.TotalPrice,
+        OrderDate=order.OrderDate
+    )
+    db.session.add(confirmed_order)
+
+    # Orders tablosundan sil
+    db.session.delete(order)
+    db.session.commit()  # Veritabanını güncelle
+
+    return redirect(url_for('order_operations'))
+
+
+
+
+@app.route('/productOperations', methods=['GET'])
+def product_operations():
+    products = Product.query.all()  # Veritabanındaki tüm ürünleri al
+    return render_template('productOperations.html', products=products)
+
+@app.route('/deleteProduct', methods=['POST'])
+def delete_product():
+    product_id = request.form['product_id']  # Formdan gelen ürün ID'sini al
+    product = Product.query.get(product_id)  # Veritabanından ürünü al
+
+    if product:
+        db.session.delete(product)  # Ürünü sil
+        db.session.commit()  # Veritabanını güncelle
+        return redirect(url_for('product_operations'))
     else:
-        return "Stok yetersiz! Lütfen tekrar deneyin."
+        return "Ürün bulunamadı!"
+
+
+@app.route('/updateStock', methods=['POST'])
+def update_stock():
+    product_id = request.form['product_id']  # Formdan gelen ürün ID'sini al
+    new_stock = int(request.form['new_stock'])  # Formdan gelen yeni stok miktarını al
+    product = Product.query.get(product_id)  # Veritabanından ürünü al
+
+    if product:
+        product.Stock = new_stock  # Stok miktarını güncelle
+        db.session.commit()  # Veritabanını güncelle
+        return redirect(url_for('product_operations'))
+    else:
+        return "Ürün bulunamadı!"
+
+@app.route('/addProduct', methods=['GET'])
+def add_product_page():
+    return render_template('addProduct.html')
+
+@app.route('/addProduct', methods=['POST'])
+def add_product():
+    # Formdan gelen verileri al
+    product_name = request.form['productName']
+    stock = int(request.form['stock'])
+    price = float(request.form['price'])
+
+    # Yeni ürün nesnesi oluştur
+    new_product = Product(
+        ProductName=product_name,
+        Stock=stock,
+        Price=price
+    )
+
+    # Veritabanına ekle
+    db.session.add(new_product)
+    db.session.commit()
+
+    return redirect(url_for('product_operations'))  # Ürün işlemleri sayfasına yönlendir
+
 
 # Flask uygulamasını çalıştır
 if __name__ == '__main__':

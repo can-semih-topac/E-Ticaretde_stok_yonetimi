@@ -4,14 +4,13 @@
     <meta charset="UTF-8">
     <title>Ürün Listesi ve Sipariş</title>
     <script>
-        function enableQuantityInput(radioButton) {
-            document.querySelectorAll('input[type="number"]').forEach(input => {
-                input.disabled = true;
-                input.value = '';
-            });
-            const quantityInput = document.getElementById('quantity-' + radioButton.value);
-            if (quantityInput) {
+        function enableQuantityInput(checkbox) {
+            const quantityInput = document.getElementById('quantity-' + checkbox.value);
+            if (checkbox.checked) {
                 quantityInput.disabled = false;
+            } else {
+                quantityInput.disabled = true;
+                quantityInput.value = '';
             }
         }
     </script>
@@ -45,10 +44,12 @@
                     <td>{{ product.Stock }}</td>
                     <td>{{ product.Price }}</td>
                     <td>
-                        <input type="radio" name="product_id" value="{{ product.ProductID }}" onclick="enableQuantityInput(this)" required>
+                        <!-- Checkbox ile ürün seçimi -->
+                        <input type="checkbox" name="product_ids" value="{{ product.ProductID }}" onclick="enableQuantityInput(this)">
                     </td>
                     <td>
-                        <input type="number" id="quantity-{{ product.ProductID }}" name="quantity" min="1" max="{{ product.Stock }}" disabled required>
+                        <!-- Miktar girişi; varsayılan olarak devre dışı -->
+                        <input type="number" id="quantity-{{ product.ProductID }}" name="quantities" min="1" max="{{ product.Stock }}" disabled>
                     </td>
                 </tr>
                 {% endfor %}
