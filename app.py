@@ -262,6 +262,51 @@ def view_logs():
 
 
 # Fonksiyonlar
+@app.route('/yenimusteri', methods=['GET'])
+def generate_customers():
+    import random
+
+    # Rastgele müşteri isimleri
+    names = [
+        "Ahmet", "Mehmet", "Ali", "Veli", "Ayşe", "Fatma", "Zeynep", "Elif", 
+        "Hüseyin", "Hasan", "Hülya", "Emre", "İsmail", "Yasemin", "Cem"
+    ]
+
+    # Bağımlı tabloları temizleme (ConfirmedOrders ve Orders)
+    ConfirmedOrder.query.delete()
+    Order.query.delete()
+
+    # Var olan tüm müşterileri sil
+    Customer.query.delete()
+
+    # 5 ile 10 arasında rastgele müşteri sayısı oluştur
+    customer_count = random.randint(5, 10)
+
+    # Yeni müşterileri oluştur
+    customers = []
+    for _ in range(customer_count):
+        name = random.choice(names)
+        budget = random.uniform(500, 3000)  # 500 ile 3000 arasında rastgele bütçe
+        customer = Customer(
+            CustomerName=name,
+            Password="1234",  # Şifre 1234 olarak ayarlanıyor
+            Budget=round(budget, 2),
+            CustomerType="Standard",  # Varsayılan "Standard"
+            TotalSpent=0.0
+        )
+        customers.append(customer)
+
+    # Rastgele 2 müşteriyi premium olarak ayarla
+    premium_customers = random.sample(customers, k=2)
+    for customer in premium_customers:
+        customer.CustomerType = "Premium"
+
+    # Yeni müşterileri veritabanına ekle
+    db.session.bulk_save_objects(customers)
+    db.session.commit()
+
+    return "Yeni müşteriler başarıyla oluşturuldu!"
+
 
 @app.route('/order', methods=['POST'])
 def place_order():

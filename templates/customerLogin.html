@@ -60,6 +60,28 @@
         .admin-button:hover {
             background-color: #e76f51;
         }
+        .extra-buttons {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .extra-buttons button {
+            width: 48%;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .view-logs {
+            background-color: #4caf50;
+        }
+        .view-logs:hover {
+            background-color: #45a049;
+        }
+        .new-customer {
+            background-color: #ff9800;
+        }
+        .new-customer:hover {
+            background-color: #e67e22;
+        }
     </style>
 </head>
 <body>
@@ -75,6 +97,10 @@
         <form action="/adminlogin" method="GET">
             <button type="submit" class="admin-button">Admin Login</button>
         </form>
+        <div class="extra-buttons">
+            <button onclick="location.href='/logs'" class="view-logs">Logları Görüntüle</button>
+            <button onclick="location.href='/yenimusteri'" class="new-customer">Yeni Müşteri Üret</button>
+        </div>
     </div>
 </body>
 </html>
