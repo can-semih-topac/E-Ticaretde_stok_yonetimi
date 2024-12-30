@@ -1,17 +1,62 @@
 from flask import Flask, render_template, request, redirect, url_for, session
-from config import DB_CONFIG  # Veritabanı bilgilerini config dosyasından alıyoruz.
-from models import db, Customer, Admin, Product, Order, ConfirmedOrder, Log  # Modelleri ve db'yi içe aktar
+from config import DB_CONFIG
+from models import db, Customer, Admin, Product, Order, ConfirmedOrder, Log
+from datetime import datetime
+import threading
 
-# Flask ve SQLAlchemy ayarları
+# Flask ayarları
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.secret_key = 'asdf'  # Gizli anahtar tanımlanması
+app.secret_key = 'asdf'
 
-# Veritabanı başlatma
 db.init_app(app)
 
-# Yardımcı Fonksiyon
+# Öncelik hesaplama ağırlığı
+PRIORITY_WEIGHT = 0.5
+
+# Öncelik skoru hesaplama fonksiyonu
+def calculate_priority(order, customer):
+    base_score = 15 if customer.CustomerType == 'Premium' else 10
+    wait_time = (datetime.utcnow() - order.OrderDate).total_seconds()
+    return base_score + (wait_time * PRIORITY_WEIGHT)
+
+# Tüm siparişleri öncelik sırasına göre onaylama fonksiyonu
+def approve_all_orders():
+    # Tüm siparişleri veritabanından çek ve öncelik sırasına göre sırala
+    orders = db.session.query(Order, Customer).join(Customer).all()
+
+    # Her sipariş için öncelik skorunu hesapla
+    orders_with_priority = [
+        (order, calculate_priority(order, customer))
+        for order, customer in orders
+    ]
+
+    # Siparişleri öncelik skoruna göre sırala
+    orders_with_priority.sort(key=lambda x: x[1], reverse=True)
+
+    # Onaylama işlemleri
+    for order, _ in orders_with_priority:
+        product = Product.query.get(order.ProductID)
+        if product and product.Stock >= order.Quantity:
+            product.Stock -= order.Quantity
+            confirmed_order = ConfirmedOrder(
+                CustomerID=order.CustomerID,
+                ProductID=order.ProductID,
+                Quantity=order.Quantity,
+                TotalPrice=order.TotalPrice,
+                OrderDate=order.OrderDate
+            )
+            db.session.add(confirmed_order)
+            db.session.delete(order)
+            create_log(order.CustomerID, order.OrderID, "Bilgilendirme", "Sipariş onaylandı.")
+        else:
+            create_log(order.CustomerID, order.OrderID, "Hata", f"Yetersiz stok: {product.ProductName if product else 'Bilinmiyor'}")
+
+    db.session.commit()
+
+
+# Log kaydetme fonksiyonu
 def create_log(customer_id, order_id, log_type, log_details):
     new_log = Log(
         CustomerID=customer_id,
@@ -31,16 +76,14 @@ def login_page():
 def customer_login():
     customername = request.form['customername']
     password = request.form['password']
-    
-    # Müşteri doğrulama
+
     customer = Customer.query.filter_by(CustomerName=customername, Password=password).first()
     if customer:
-        # Oturuma müşteri adını kaydet
         session['customer_name'] = customer.CustomerName
         session['customer_id'] = customer.CustomerID
         return redirect(url_for('index'))
-    else:
-        return "Geçersiz giriş bilgileri. Lütfen tekrar deneyin."
+    return "Geçersiz giriş bilgileri. Lütfen tekrar deneyin."
+
 
 @app.route('/index', methods=['GET'])
 def index():
@@ -85,19 +128,52 @@ def admin_login():
     if request.method == 'POST':
         adminname = request.form['adminname']
         password = request.form['password']
-        
-        # Admin doğrulama
         admin = Admin.query.filter_by(AdminName=adminname, Password=password).first()
         if admin:
+            session['admin_name'] = admin.AdminName
             return redirect(url_for('admin_panel'))
-        else:
-            return "Geçersiz giriş bilgileri. Lütfen tekrar deneyin."
+        return "Geçersiz giriş bilgileri. Lütfen tekrar deneyin."
     return render_template('adminLogin.html')
 
-# Admin paneli rotası
-@app.route('/adminPanel')
+@app.route('/adminPanel', methods=['GET']) # İki seçenek sunan admin ekranı (Sipariş ve ürün işlemleri)
 def admin_panel():
+    if 'admin_name' not in session:
+        return redirect(url_for('admin_login'))
     return render_template('adminPanel.html')
+
+@app.route('/orderOperations', methods=['GET'])
+def order_operations():
+    orders = Order.query.all()
+    for order in orders:
+        customer = Customer.query.get(order.CustomerID)
+        order.priority_score = calculate_priority(order, customer)
+    confirmed_orders = ConfirmedOrder.query.all()
+    return render_template('orderOperations.html', orders=orders, confirmed_orders=confirmed_orders)
+
+@app.route('/productOperations', methods=['GET'])
+def product_operations():
+    products = Product.query.all()  # Veritabanındaki tüm ürünleri al
+    return render_template('productOperations.html', products=products)
+
+@app.route('/addProduct', methods=['GET'])
+def add_product_page():
+    return render_template('addProduct.html')
+
+@app.route('/logout') # Müşteri sayfasındaki çıkış yapma fonksiyonu
+def logout():
+    session.clear()  # Oturum verilerini temizler
+    return render_template('customerLogin.html')  # Giriş sayfasını döndürür
+
+@app.route('/logs', methods=['GET']) # Logları görüntüleme fonksiyonu
+def view_logs():
+    logs = Log.query.order_by(Log.LogDate.desc()).all()
+    return render_template('logs.html', logs=logs)
+
+
+
+
+
+# Fonksiyonlar
 
 @app.route('/order', methods=['POST'])
 def place_order():
@@ -165,13 +241,23 @@ def place_order():
     create_log(customer_id, None, "Bilgilendirme", "Satın alma başarılı.")
     return f"Sipariş başarıyla verildi! Toplam: {total_order_price:.2f} TL"
 
-@app.route('/orderOperations', methods=['GET'])
-def order_operations():
-    orders = Order.query.all()  # Orders tablosundaki tüm siparişleri al
-    confirmed_orders = ConfirmedOrder.query.all()  # ConfirmedOrders tablosundaki tüm siparişleri al
-    return render_template('orderOperations.html', orders=orders, confirmed_orders=confirmed_orders)
+@app.route('/refreshOrders', methods=['GET'])
+def refresh_orders():
+    orders = Order.query.all()
+    for order in orders:
+        customer = Customer.query.get(order.CustomerID)
+        order.priority_score = calculate_priority(order, customer)
+    return redirect(url_for('order_operations'))
 
-@app.route('/approveOrder', methods=['POST'])
+@app.route('/approveAllOrders', methods=['POST']) # Asıl işi yapan fonksiyon yukarıda
+def approve_all_orders_route():
+    # approve_all_orders fonksiyonunu doğrudan çalıştır
+    approve_all_orders()
+    return redirect(url_for('order_operations'))
+
+
+
+@app.route('/approveOrder', methods=['POST']) # Sipariş onaylama fonksiyonu (tek tek)
 def approve_order():
     order_id = request.form['order_id']  # Formdan gelen sipariş ID'sini al
     order = Order.query.get(order_id)  # Orders tablosundan siparişi al
@@ -209,11 +295,6 @@ def approve_order():
 
     return redirect(url_for('order_operations'))
 
-@app.route('/productOperations', methods=['GET'])
-def product_operations():
-    products = Product.query.all()  # Veritabanındaki tüm ürünleri al
-    return render_template('productOperations.html', products=products)
-
 @app.route('/deleteProduct', methods=['POST'])
 def delete_product():
     product_id = request.form['product_id']  # Formdan gelen ürün ID'sini al
@@ -243,10 +324,6 @@ def update_stock():
         create_log(None, None, "Hata", f"Stok güncellenemedi. Ürün ID: {product_id}")
         return "Ürün bulunamadı!"
 
-@app.route('/addProduct', methods=['GET'])
-def add_product_page():
-    return render_template('addProduct.html')
-
 @app.route('/addProduct', methods=['POST'])
 def add_product():
     # Formdan gelen verileri al
@@ -265,13 +342,11 @@ def add_product():
     create_log(None, None, "Bilgilendirme", f"Yeni ürün eklendi. Ürün: {product_name}")
     return redirect(url_for('product_operations'))  # Ürün işlemleri sayfasına yönlendir
 
-@app.route('/logs', methods=['GET'])
-def view_logs():
-    logs = Log.query.order_by(Log.LogDate.desc()).all()
-    return render_template('logs.html', logs=logs)
 
-# Flask uygulamasını çalıştır
+
+
+
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # Veritabanı tablolarını oluşturur
+        db.create_all()
     app.run(debug=True)

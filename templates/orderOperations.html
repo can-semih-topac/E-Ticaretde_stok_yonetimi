@@ -41,6 +41,19 @@
         .approve-button:hover {
             background-color: darkgreen;
         }
+        .approve-all-button, .refresh-button {
+            margin-top: 20px;
+            background-color: blue;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .approve-all-button:hover, .refresh-button:hover {
+            background-color: darkblue;
+        }
     </style>
 </head>
 <body>
@@ -57,7 +70,7 @@
                 <th>Miktar</th>
                 <th>Toplam Fiyat</th>
                 <th>Sipariş Tarihi</th>
-                <th>Öncelik</th>
+                <th>Öncelik Skoru</th>
                 <th>İşlemler</th>
             </tr>
         </thead>
@@ -70,7 +83,7 @@
                 <td>{{ order.Quantity }}</td>
                 <td>{{ order.TotalPrice }}</td>
                 <td>{{ order.OrderDate }}</td>
-                <td>1</td> <!-- Öncelik Sütunu (Sabit Değer) -->
+                <td>{{ order.priority_score }}</td>
                 <td class="action-button">
                     <form action="/approveOrder" method="POST" style="display: inline;">
                         <input type="hidden" name="order_id" value="{{ order.OrderID }}">
@@ -81,6 +94,14 @@
             {% endfor %}
         </tbody>
     </table>
+
+    <!-- Tümünü Onayla ve Yenile Butonları -->
+    <form action="/approveAllOrders" method="POST" style="display: inline;">
+        <button type="submit" class="approve-all-button">Tümünü Onayla</button>
+    </form>
+    <form action="/refreshOrders" method="GET" style="display: inline;">
+        <button type="submit" class="refresh-button">Yenile</button>
+    </form>
 
     <!-- ConfirmedOrders Tablosu -->
     <h2>Onaylanmış Siparişler</h2>
