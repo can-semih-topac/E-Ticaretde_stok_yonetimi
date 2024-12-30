@@ -4,6 +4,8 @@ from models import db, Customer, Admin, Product, Order, ConfirmedOrder, Log
 from datetime import datetime
 import threading
 
+lock = threading.Lock()  # Global bir kilit nesnesi oluştur
+
 # Flask ayarları
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{DB_CONFIG['user']}:{DB_CONFIG['password']}@{DB_CONFIG['host']}/{DB_CONFIG['database']}"
@@ -177,69 +179,70 @@ def view_logs():
 
 @app.route('/order', methods=['POST'])
 def place_order():
-    # Oturumdan müşteri ID'sini al
-    customer_id = session.get('customer_id')
-    if not customer_id:
-        return redirect(url_for('login_page'))  # Eğer giriş yapılmadıysa login sayfasına yönlendir
+    with lock:  # Kilit al
+        # Oturumdan müşteri ID'sini al
+        customer_id = session.get('customer_id')
+        if not customer_id:
+            return redirect(url_for('login_page'))  # Eğer giriş yapılmadıysa login sayfasına yönlendir
 
-    # Formdan seçilen ürün ID'leri ve miktarlarını al
-    product_ids = request.form.getlist('product_ids')
-    quantities = request.form.getlist('quantities')
+        # Formdan seçilen ürün ID'leri ve miktarlarını al
+        product_ids = request.form.getlist('product_ids')
+        quantities = request.form.getlist('quantities')
 
-    # Veritabanından müşteri bilgilerini al
-    customer = Customer.query.get(customer_id)
+        # Veritabanından müşteri bilgilerini al
+        customer = Customer.query.get(customer_id)
 
-    # Sipariş toplam fiyatını hesapla
-    total_order_price = 0
-    orders_to_add = []
+        # Sipariş toplam fiyatını hesapla
+        total_order_price = 0
+        orders_to_add = []
 
-    for product_id, quantity in zip(product_ids, quantities):
-        product = Product.query.get(int(product_id))
-        quantity = int(quantity)
+        for product_id, quantity in zip(product_ids, quantities):
+            product = Product.query.get(int(product_id))
+            quantity = int(quantity)
 
-        if not product:
-            create_log(customer_id, None, "Hata", f"Ürün bulunamadı. Ürün ID: {product_id}")
-            return f"Ürün ID {product_id} bulunamadı."
+            if not product:
+                create_log(customer_id, None, "Hata", f"Ürün bulunamadı. Ürün ID: {product_id}")
+                return redirect(url_for('index'))  # Ürün bulunamadıysa index sayfasına yönlendir
 
-        total_price = product.Price * quantity
-        total_order_price += total_price
+            total_price = product.Price * quantity
+            total_order_price += total_price
 
-        if product.Stock < quantity:
-            create_log(customer_id, None, "Hata", f"Ürün stoğu yetersiz. Ürün: {product.ProductName}")
-            return "Yetersiz stok!"
+            if product.Stock < quantity:
+                create_log(customer_id, None, "Hata", f"Ürün stoğu yetersiz. Ürün: {product.ProductName}")
+                return redirect(url_for('index'))  # Stok yetersizse index sayfasına yönlendir
 
-        orders_to_add.append({
-            "product": product,
-            "quantity": quantity,
-            "total_price": total_price
-        })
+            orders_to_add.append({
+                "product": product,
+                "quantity": quantity,
+                "total_price": total_price
+            })
 
-    # Bütçe kontrolü
-    if customer.Budget < total_order_price:
-        create_log(customer_id, None, "Hata", "Müşteri bakiyesi yetersiz.")
-        return "Yetersiz Bütçe! Lütfen daha düşük bir sipariş girin."
+        # Bütçe kontrolü
+        if customer.Budget < total_order_price:
+            create_log(customer_id, None, "Hata", "Müşteri bakiyesi yetersiz.")
+            return redirect(url_for('index'))  # Bütçe yetersizse index sayfasına yönlendir
 
-    # Siparişi tamamla
-    for order in orders_to_add:
-        product = order["product"]
-        quantity = order["quantity"]
-        total_price = order["total_price"]
+        # Siparişi tamamla
+        for order in orders_to_add:
+            product = order["product"]
+            quantity = order["quantity"]
+            total_price = order["total_price"]
 
-        product.Stock -= quantity
+            product.Stock -= quantity
 
-        new_order = Order(
-            CustomerID=customer.CustomerID,
-            ProductID=product.ProductID,
-            Quantity=quantity,
-            TotalPrice=total_price
-        )
-        db.session.add(new_order)
+            new_order = Order(
+                CustomerID=customer.CustomerID,
+                ProductID=product.ProductID,
+                Quantity=quantity,
+                TotalPrice=total_price
+            )
+            db.session.add(new_order)
 
-    customer.Budget -= total_order_price
-    db.session.commit()
+        customer.Budget -= total_order_price
+        db.session.commit()
 
-    create_log(customer_id, None, "Bilgilendirme", "Satın alma başarılı.")
-    return f"Sipariş başarıyla verildi! Toplam: {total_order_price:.2f} TL"
+        create_log(customer_id, None, "Bilgilendirme", "Satın alma başarılı.")
+        return redirect(url_for('index'))  # Sayfayı yenileyip yeniden göster
 
 @app.route('/refreshOrders', methods=['GET'])
 def refresh_orders():
@@ -249,51 +252,54 @@ def refresh_orders():
         order.priority_score = calculate_priority(order, customer)
     return redirect(url_for('order_operations'))
 
-@app.route('/approveAllOrders', methods=['POST']) # Asıl işi yapan fonksiyon yukarıda
+@app.route('/approveAllOrders', methods=['POST'])
 def approve_all_orders_route():
-    # approve_all_orders fonksiyonunu doğrudan çalıştır
-    approve_all_orders()
+    with lock:  # Kilit al
+        approve_all_orders()
     return redirect(url_for('order_operations'))
 
 
 
-@app.route('/approveOrder', methods=['POST']) # Sipariş onaylama fonksiyonu (tek tek)
+
+@app.route('/approveOrder', methods=['POST'])
 def approve_order():
-    order_id = request.form['order_id']  # Formdan gelen sipariş ID'sini al
-    order = Order.query.get(order_id)  # Orders tablosundan siparişi al
+    with lock:  # Kilit al
+        order_id = request.form['order_id']  # Formdan gelen sipariş ID'sini al
+        order = Order.query.get(order_id)  # Orders tablosundan siparişi al
 
-    if not order:
-        create_log(None, order_id, "Hata", "Sipariş bulunamadı.")
-        return "Sipariş bulunamadı!"
+        if not order:
+            create_log(None, order_id, "Hata", "Sipariş bulunamadı.")
+            return "Sipariş bulunamadı!"
 
-    # Veritabanından ürün bilgilerini al
-    product = Product.query.get(order.ProductID)
-    if not product:
-        create_log(order.CustomerID, order_id, "Hata", "Ürün bulunamadı.")
-        return "Ürün bulunamadı!"
+        # Veritabanından ürün bilgilerini al
+        product = Product.query.get(order.ProductID)
+        if not product:
+            create_log(order.CustomerID, order_id, "Hata", "Ürün bulunamadı.")
+            return "Ürün bulunamadı!"
 
-    # Stok kontrolü
-    if order.Quantity > product.Stock:
-        create_log(order.CustomerID, order_id, "Hata", f"Yetersiz stok! Ürün: {product.ProductName}")
-        return f"Yetersiz stok! {product.ProductName} için maksimum {product.Stock} adet onaylanabilir."
+        # Stok kontrolü
+        if order.Quantity > product.Stock:
+            create_log(order.CustomerID, order_id, "Hata", f"Yetersiz stok! Ürün: {product.ProductName}")
+            return f"Yetersiz stok! {product.ProductName} için maksimum {product.Stock} adet onaylanabilir."
 
-    product.Stock -= order.Quantity
+        product.Stock -= order.Quantity
 
-    confirmed_order = ConfirmedOrder(
-        CustomerID=order.CustomerID,
-        ProductID=order.ProductID,
-        Quantity=order.Quantity,
-        TotalPrice=order.TotalPrice,
-        OrderDate=order.OrderDate
-    )
-    db.session.add(confirmed_order)
+        confirmed_order = ConfirmedOrder(
+            CustomerID=order.CustomerID,
+            ProductID=order.ProductID,
+            Quantity=order.Quantity,
+            TotalPrice=order.TotalPrice,
+            OrderDate=order.OrderDate
+        )
+        db.session.add(confirmed_order)
 
-    create_log(order.CustomerID, order.OrderID, "Bilgilendirme", "Sipariş onaylandı.")
+        create_log(order.CustomerID, order.OrderID, "Bilgilendirme", "Sipariş onaylandı.")
 
-    db.session.delete(order)
-    db.session.commit()  # Veritabanını güncelle
+        db.session.delete(order)
+        db.session.commit()  # Veritabanını güncelle
 
-    return redirect(url_for('order_operations'))
+        return redirect(url_for('order_operations'))
+
 
 @app.route('/deleteProduct', methods=['POST'])
 def delete_product():
